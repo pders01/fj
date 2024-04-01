@@ -12,7 +12,13 @@ To use fj, simply type `fj <ALIAS>` in your terminal to navigate to the director
 Example:
 `fj projects -c`
 
+## Build Dependencies
+- [uthash](https://github.com/troydhanson/uthash)
+
 ## Installation
+
+### Building from Source
+
 1. Clone this repository to your local machine:
 
 ```sh
