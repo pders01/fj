@@ -25,45 +25,27 @@ $(EXECUTABLE): $(OBJS)
 clean:
 	rm -f $(EXECUTABLE) $(OBJS)
 
+SHELL := $(shell basename $$SHELL)
+
 install: $(EXECUTABLE)
-	@echo "Installation instructions:"
-	@echo "1. Copy '$(EXECUTABLE)' to a directory in your PATH (e.g., /usr/local/bin)"
-	@echo "2. Add the following shell function to your shell configuration:"
-	@echo "   function fj() {"
-	@echo "       if [ $$# -eq 1 ]; then"
-	@echo "           new_dir=$$(./fj $$1)"
-	@echo "           if [ $$? -eq 0 ]; then"
-	@echo "               cd \"$$new_dir\""
-	@echo "           fi"
-	@echo "       else"
-	@echo "           echo \"Usage: fj <ALIAS>\""
-	@echo "       fi"
-	@echo "   }"
+	@echo "Installing $(EXECUTABLE) to /usr/local/bin/..."
+	@sudo cp $(EXECUTABLE) /usr/local/bin/
+	@echo "Installation successful."
+	@echo ""
+	@echo "Appending fj function to your shell configuration..."
 
-_fj_complete() {
-   local cur prev expanded_path
+ifeq ($(SHELL), bash)
+	@echo "" >> ~/.bashrc
+	@cat fj_function.sh >> ~/.bashrc
+	@echo "fj function appended to ~/.bashrc."
+	@echo "Please restart your shell or run 'source ~/.bashrc' to apply changes."
+else ifeq ($(SHELL), zsh)
+	@echo "" >> ~/.zshenv
+	@cat fj_function.sh >> ~/.zshenv
+	@cat fj_function.sh
+	@echo "fj function appended to ~/.zshenv."
+	@echo "Please restart your shell or run 'source ~/.zshenv' to apply changes."
+else
+	@echo "Unsupported shell: $(SHELL). Please manually append the fj function to your shell configuration."
+endif
 
-   cur="${words[CURRENT]}"  
-   prev="${words[CURRENT-1]}"
-
-   if [[ $prev == 'fj' && $CURRENT -eq 2 ]]; then
-      expanded_path=$(./fj -complete "$cur") 
-      if [[ -d $expanded_path ]]; then # Safety check
-         # Trigger standard Zsh directory completion
-         COMPREPLY=(${(f)"$(cd $expanded_path; pwd)"})
-      fi 
-   fi
-}
-
-compctl -K _fj_complete fj
-
-function fj() {
-  if [ -d $1 ]; then
-    cd "$new_dir"
-  elif [ $# -eq 1 ]; then
-    new_dir=$(./fj $1)
-    cd "$new_dir"   
-  else
-    echo ./fj $1
-  fi
-}
