@@ -35,7 +35,7 @@ fj() {
 		cat <<EOF >&2
 Usage: $(basename "$0") <ALIAS> [-c|--complete]
 
-Reads your aliases under /home/$USER/.alias.d/paths and lets you easily change into them.
+Reads your aliases under /home/$USER/.aliasrc{.d/\b.*path.*\b/i} and lets you easily change into them.
 EOF
 		return 1
 	fi
