@@ -22,6 +22,7 @@ struct alias_entry {
 void read_alias_file(const char *filename, alias_dictionary *dict) {
   FILE *fp = fopen(filename, "r");
   if (fp == NULL) {
+    fprintf(stderr, "Error opening file: %s\n", filename);
     return;
   }
 
@@ -30,7 +31,6 @@ void read_alias_file(const char *filename, alias_dictionary *dict) {
     if (strncmp(line, "alias ", 6) == 0) {
       char *alias = strtok(line + 6, "=");
       char *path = strtok(NULL, "\n");
-
       if (alias && path) {
         struct alias_entry *entry = malloc(sizeof(struct alias_entry));
         if (!entry) {
@@ -45,6 +45,7 @@ void read_alias_file(const char *filename, alias_dictionary *dict) {
           free(entry);
           continue;
         }
+
         entry->path = strdup(path);
         if (!entry->path) {
           fprintf(stderr, "Memory allocation error\n");
@@ -52,6 +53,7 @@ void read_alias_file(const char *filename, alias_dictionary *dict) {
           free(entry);
           continue;
         }
+
         HASH_ADD_STR(dict->entries, alias, entry);
       }
     }
@@ -60,16 +62,50 @@ void read_alias_file(const char *filename, alias_dictionary *dict) {
   fclose(fp);
 }
 
-bool validate_arguments(int argc, char *argv[]) {
+int process_aliasrc_directory(const char *dir_path, alias_dictionary *dict) {
+  DIR *dir = opendir(dir_path);
+  if (!dir) {
+    fprintf(stderr, "Error opening directory: %s\n", dir_path);
+    return -1;
+  }
+
+  struct dirent *entry;
+  while ((entry = readdir(dir)) != NULL) {
+    if (strcasecmp(entry->d_name, ".") == 0 ||
+        strcasecmp(entry->d_name, "..") == 0) {
+      continue;
+    }
+
+    if (strcasestr(entry->d_name, "path") != NULL) {
+      char full_path[512];
+      snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
+      read_alias_file(full_path, dict);
+    }
+  }
+
+  closedir(dir);
+  return 0;
+}
+
+bool validate_arguments(int argc, char *argv[], const char **filename) {
   if (argc == 2) {
+    *filename = NULL;
     return true;
   }
 
   if (argc == 3 && strcmp(argv[1], "-complete") == 0) {
+    *filename = NULL;
     return true;
   }
 
-  fprintf(stderr, "Usage fj <ALIAS> OR fj -complete <partial_path>\n");
+  if (argc == 4 && strcmp(argv[1], "-file") == 0) {
+    *filename = argv[2];
+    return true;
+  }
+
+  fprintf(
+      stderr,
+      "Usage: fj <ALIAS> OR fj -complete <ALIAS> OR fj -file <PATH> <ALIAS>\n");
   return false;
 }
 
@@ -134,14 +170,35 @@ void generate_completions(const char *expanded_path) {
 
 int main(int argc, char *argv[]) {
   alias_dictionary alias_dict = {.entries = NULL};
+  const char *filename = NULL;
 
-  const char *home_dir = getenv("HOME");
-  char alias_dir[512];
-  snprintf(alias_dir, sizeof(alias_dir), "%s/.alias.d/paths", home_dir);
-  read_alias_file(alias_dir, &alias_dict);
-
-  if (!validate_arguments(argc, argv)) {
+  if (!validate_arguments(argc, argv, &filename)) {
     return 1;
+  }
+
+  if (filename != NULL) {
+    if (access(filename, F_OK) != 0) {
+      fprintf(stderr, "Error: File not found: %s\n", filename);
+      return 1;
+    }
+    read_alias_file(filename, &alias_dict);
+  } else {
+    const char *home_dir = getenv("HOME");
+    if (!home_dir) {
+      fprintf(stderr, "Error: Cannot get HOME directory\n");
+      return 1;
+    }
+
+    char aliasrc_path[512];
+    snprintf(aliasrc_path, sizeof(aliasrc_path), "%s/.aliasrc", home_dir);
+    read_alias_file(aliasrc_path, &alias_dict);
+
+    char aliasrc_dir[512];
+    snprintf(aliasrc_dir, sizeof(aliasrc_dir), "%s/.aliasrc.d", home_dir);
+    if (process_aliasrc_directory(aliasrc_dir, &alias_dict) != 0) {
+      fprintf(stderr, "Error: Error while processing .aliasrc.d\n");
+      return 1;
+    }
   }
 
   const char *partial_path = get_partial_path(argc, argv);
